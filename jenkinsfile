@@ -1,0 +1,70 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Temizleme ve JMeter Test Çalıştır') {
+            steps {
+                
+                bat 'if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report" rd /s /q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report"'
+                bat 'if exist "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\result.jtl" del "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\result.jtl"'
+                bat '"C:\\Program Files\\apache-jmeter-5.6.3\\bin\\jmeter.bat" -n -t "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\DummySamplerExample.jmx" -l "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\result.jtl" -e -o "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report"'
+            }
+        }
+
+        stage('Report Zip') {
+            steps {
+                script {
+                    
+                    bat "if exist \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report.zip\" del \"C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report.zip\""
+                    bat "powershell Compress-Archive -Path 'C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report\\*' -DestinationPath 'C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report.zip' -Force"
+                }
+            }
+        }
+
+        
+        stage('Archive Report Artifact') {
+            steps {
+                script {
+                    
+                    def zipFileName = "report.zip"
+                    def zipPath = "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report.zip"
+                    bat 'dir "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project"'
+                    archiveArtifacts allowEmptyArchive: true, artifacts: 'C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\report.zip', followSymlinks: false
+                }
+            }
+        }
+
+        // Upload to Google Drive
+        stage('Upload to Google Drive') {
+            steps {
+                script {
+                    
+                    def fileLink = bat(script: 'C:\\Users\\ozkan\\AppData\\Local\\Programs\\Python\\Python313\\python.exe C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\JMeter_Integrate_Project\\upload_to_drive.py', returnStdout: true).trim()
+                    def driveLink = fileLink.split("\n").find { it.contains("https://drive.google.com") }
+                    env.FILE_LINK = "Google Drive Link: ${driveLink}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Performans Testi Başarılı"
+            emailext (
+                subject: "JMeter Performance Test SUCCESS",
+                body: "Performans testi başarıyla tamamlandı. Rapora Google Drive linki üzerinden erişebilirsiniz:\n\n${env.FILE_LINK}",
+                attachLog: false,
+                to: 'ozkanberke1305@gmail.com'
+            )
+        }
+        failure {
+            echo "Test Başarısız"
+            emailext (
+                subject: "JMeter Performance Test FAILED",
+                body: "Performans testi başarısız oldu. Rapora Google Drive linki üzerinden erişebilirsiniz:\n\n${env.FILE_LINK}",
+                attachLog: false,
+                to: 'ozkanberke1305@gmail.com'
+            )
+        }
+    }
+}
